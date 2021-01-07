@@ -44,7 +44,6 @@
 
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
-DMA_HandleTypeDef hdma_adc1;
 
 DAC_HandleTypeDef hdac1;
 DMA_HandleTypeDef hdma_dac1_ch1;
@@ -85,10 +84,13 @@ void get_sineval ()
 {
 	for (i=0;i<100;i++)
 	{
-		sin_val[i] = ((sin(i*2*PI/100) + 1)*((0xFFF+1)/2));
+		sin_val[i] = ((sin(i*2*PI/100) + 1)*((4095+1)/2)+1000);
+		//sin_val[i] = ((sin(i*2*PI/100) + 1)*(4095+1/2)); //il secondo elemento è l'ampiezza *** attenzione, essendo valori interi, se <0 la sin appare tosata
+		//il +1000 serve solo se applichiamo il fattore di scala e va modulato in base ad esso
+		//1000 va bene per il fattore di scala 0.1, poichè mi fa uscire dal limite della risoluzione del DAC
 		sin_val[i]=sin_val[i]*0.1; //fattore di scala
-		//sin_val[i] = ((sin(i*2*PI/100) + 1)*(100)); //il secondo elemento è l'ampiezza *** attenzione, essendo valori interi, se <0 la sin appare tosata
 	}
+
 }
 
 uint8_t buffertx[100]="";
@@ -108,7 +110,6 @@ int main(void)
 
 
   /* USER CODE END 1 */
-
 /* USER CODE BEGIN Boot_Mode_Sequence_0 */
   int32_t timeout;
 /* USER CODE END Boot_Mode_Sequence_0 */
@@ -196,7 +197,6 @@ int cont2=0;
 		{
 
 
-
 		  /*		   * *** DAC data value to voltage correspondence ***
         DAC_OUTx = VREF+ * DOR / 4095
         with  DOR is the Data Output Register
@@ -206,11 +206,11 @@ int cont2=0;
 
 		   */
       		 HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, sin_val[i]);
-     		//for (j=0;j<200;j++)  //ritardo sintetico ottimale a 20
+     		for (j=0;j<10000;j++)  //ritardo sintetico ottimale a 20 ( da 500 in poi )
      		{
      			cont++;
      		}
-      		HAL_Delay(10); //min 0.5
+      		//HAL_Delay(1); //min 0.5
 
 		}
 		   //cont=cont-1;
@@ -227,15 +227,17 @@ int cont2=0;
 		  HAL_ADC_Stop(&hadc1);
 
 		  //USUART
-		  sprintf(buffertx, "%u\n\r", uiAnalogData);
-		  HAL_UART_Transmit(&huart3, buffertx, 100, 1);
+		  //sprintf(buffertx, "%d\n\r", uiAnalogData);
+		  //HAL_UART_Transmit(&huart3, buffertx, 1000, 1);
 		  //for (k=0;k<2000;k++)  //ritardo sintetico ottimale a 20
 		       		{
 		       			cont2++;
 		       		}
 		 // cont2=cont2-1;
 
-		  //HAL_Delay(1);
+		  //HAL_Delay(10);
+
+
 		  //HAL_UART_Transmit(&huart3, "HELLO WORD\n\r", 15, 1000); //print su seriale
 
   }
@@ -338,7 +340,7 @@ static void MX_ADC1_Init(void)
   /** Common config
   */
   hadc1.Instance = ADC1;
-  hadc1.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV1;
+  hadc1.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV8;
   hadc1.Init.Resolution = ADC_RESOLUTION_16B;
   hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
   hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
@@ -526,9 +528,6 @@ static void MX_DMA_Init(void)
   __HAL_RCC_DMA1_CLK_ENABLE();
 
   /* DMA interrupt init */
-  /* DMA1_Stream0_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream0_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Stream0_IRQn);
   /* DMA1_Stream5_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Stream5_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream5_IRQn);
