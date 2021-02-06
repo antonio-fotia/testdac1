@@ -79,16 +79,18 @@ uint32_t sin_val[100];
 
 #define PI 3.1415926
 int i=0;
+int shift=0; //fattore che mi permette di traslare verticalmente il segnale generato
+float scale=1; //fattore di scala
 
 void get_sineval ()
 {
 	for (i=0;i<100;i++)
 	{
-		sin_val[i] = ((sin(i*2*PI/100) + 1)*((4095+1)/2)+1000);
+		sin_val[i] = ((sin(i*2*PI/100) + 1)*((4095+1)/2) + shift);
 		//sin_val[i] = ((sin(i*2*PI/100) + 1)*(4095+1/2)); //il secondo elemento è l'ampiezza *** attenzione, essendo valori interi, se <0 la sin appare tosata
 		//il +1000 serve solo se applichiamo il fattore di scala e va modulato in base ad esso
 		//1000 va bene per il fattore di scala 0.1, poichè mi fa uscire dal limite della risoluzione del DAC
-		sin_val[i]=sin_val[i]*0.1; //fattore di scala
+		sin_val[i]=sin_val[i]*scale; //fattore di scala
 	}
 
 }
@@ -104,7 +106,7 @@ uint8_t buffertx[100]="";
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-
+	//unsigned int uiAnalogData[100];
 	unsigned int uiAnalogData=0;
 
 
@@ -188,6 +190,7 @@ Error_Handler();
 	  uint8_t buffertx[100]="";
 int cont=0;
 int j=0;
+int alfa=25000;
 int k=0;
 int cont2=0;
 
@@ -205,14 +208,14 @@ int cont2=0;
            Assuming that VREF+ = 3.3V, DAC_OUT1 = (3.3 * 868) / 4095 = 0.7V
 
 		   */
-      		 HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, sin_val[i]);
-     		for (j=0;j<10000;j++)  //ritardo sintetico ottimale a 20 ( da 500 in poi )
+      		HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, sin_val[i]);
+     		for (j=0;j<alfa;j++)  //ritardo sintetico
      		{
      			cont++;
      		}
-      		//HAL_Delay(1); //min 0.5
+      		//HAL_Delay(100); //min 0.5
 
-		}
+
 		   //cont=cont-1;
 
 		  // ADC
@@ -223,22 +226,24 @@ int cont2=0;
 
 		  HAL_ADC_Start(&hadc1);
 		  HAL_ADC_PollForConversion(&hadc1, 1000);
+		  //uiAnalogData[i]=HAL_ADC_GetValue(&hadc1);
 		  uiAnalogData=HAL_ADC_GetValue(&hadc1);
 		  HAL_ADC_Stop(&hadc1);
 
 		  //USUART
 		  //sprintf(buffertx, "%d\n\r", uiAnalogData);
-		  //HAL_UART_Transmit(&huart3, buffertx, 1000, 1);
-		  //for (k=0;k<2000;k++)  //ritardo sintetico ottimale a 20
+		  //HAL_UART_Transmit(&huart3, buffertx, 100, 1);
+		  /*for (k=0;k<2000;k++)  //ritardo sintetico ottimale a 20
 		       		{
 		       			cont2++;
 		       		}
-		 // cont2=cont2-1;
+		*/ //cont2=cont2-1;
 
-		  //HAL_Delay(10);
+		  //HAL_Delay(1);
 
-
+		}
 		  //HAL_UART_Transmit(&huart3, "HELLO WORD\n\r", 15, 1000); //print su seriale
+
 
   }
 
@@ -340,12 +345,12 @@ static void MX_ADC1_Init(void)
   /** Common config
   */
   hadc1.Instance = ADC1;
-  hadc1.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV8;
+  hadc1.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV1;
   hadc1.Init.Resolution = ADC_RESOLUTION_16B;
   hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
   hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
   hadc1.Init.LowPowerAutoWait = DISABLE;
-  hadc1.Init.ContinuousConvMode = ENABLE;
+  hadc1.Init.ContinuousConvMode = DISABLE;
   hadc1.Init.NbrOfConversion = 1;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
   hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
@@ -367,7 +372,7 @@ static void MX_ADC1_Init(void)
   }
   /** Configure Regular Channel
   */
-  sConfig.Channel = ADC_CHANNEL_2;
+  sConfig.Channel = ADC_CHANNEL_15;
   sConfig.Rank = ADC_REGULAR_RANK_1;
   sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
   sConfig.SingleDiff = ADC_SINGLE_ENDED;
@@ -547,7 +552,6 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOF_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOG_CLK_ENABLE();
