@@ -80,7 +80,10 @@ uint32_t sin_val[100];
 #define PI 3.1415926
 int i=0;
 int shift=0; //fattore che mi permette di traslare verticalmente il segnale generato
-float scale=1; //fattore di scala
+             //("+" verso l'alto, "-" verso il basso)
+             // traslo la curva per superare i limiti di risoluzione del DAC, soprattutto con fattori di scala bassi
+
+float scale=1; //fattore di scala: posso modificare l'ampiezza dell'onda generata
 
 void get_sineval ()
 {
@@ -106,8 +109,8 @@ uint8_t buffertx[100]="";
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-	//unsigned int uiAnalogData[100];
-	unsigned int uiAnalogData=0;
+	unsigned int uiAnalogData[100];
+	//unsigned int uiAnalogData=0;
 
 
 
@@ -190,9 +193,8 @@ Error_Handler();
 	  uint8_t buffertx[100]="";
 int cont=0;
 int j=0;
-int alfa=25000;
-int k=0;
-int cont2=0;
+int alfa=100000;
+
 
         //DAC
 
@@ -225,24 +227,19 @@ int cont2=0;
 		  //HAL_ADC_Stop(&hadc1);
 
 		  HAL_ADC_Start(&hadc1);
-		  HAL_ADC_PollForConversion(&hadc1, 1000);
-		  //uiAnalogData[i]=HAL_ADC_GetValue(&hadc1);
-		  uiAnalogData=HAL_ADC_GetValue(&hadc1);
+		  HAL_ADC_PollForConversion(&hadc1, 100);
+		  uiAnalogData[i]=HAL_ADC_GetValue(&hadc1);
+		  //uiAnalogData=HAL_ADC_GetValue(&hadc1);
 		  HAL_ADC_Stop(&hadc1);
 
 		  //USUART
-		  //sprintf(buffertx, "%d\n\r", uiAnalogData);
+		  //sprintf(buffertx, "%d\n\r", uiAnalogData[i]);
 		  //HAL_UART_Transmit(&huart3, buffertx, 100, 1);
-		  /*for (k=0;k<2000;k++)  //ritardo sintetico ottimale a 20
-		       		{
-		       			cont2++;
-		       		}
-		*/ //cont2=cont2-1;
 
 		  //HAL_Delay(1);
 
 		}
-		  //HAL_UART_Transmit(&huart3, "HELLO WORD\n\r", 15, 1000); //print su seriale
+
 
 
   }
