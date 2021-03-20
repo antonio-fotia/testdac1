@@ -44,10 +44,12 @@
 
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
+ADC_HandleTypeDef hadc2;
 
 DAC_HandleTypeDef hdac1;
 DMA_HandleTypeDef hdma_dac1_ch1;
 
+TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
 
 UART_HandleTypeDef huart3;
@@ -64,6 +66,8 @@ static void MX_DAC1_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_USART3_UART_Init(void);
+static void MX_ADC2_Init(void);
+static void MX_TIM1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -73,32 +77,106 @@ static void MX_USART3_UART_Init(void);
 
 float value = 0.2;
 
-uint32_t var;
+uint32_t signal[500];
 
-uint32_t sin_val[100];
-
+uint32_t sin_val[300];
+uint32_t ground[100];
+uint32_t peakpositive[100];
+uint32_t peaknegative[100];
 #define PI 3.1415926
 int i=0;
 int shift=0; //fattore che mi permette di traslare verticalmente il segnale generato
              //("+" verso l'alto, "-" verso il basso)
              // traslo la curva per superare i limiti di risoluzione del DAC, soprattutto con fattori di scala bassi
 
-float scale=1; //fattore di scala: posso modificare l'ampiezza dell'onda generata
+float scale=0.5; //fattore di scala: posso modificare l'ampiezza dell'onda generata
+
 
 void get_sineval ()
 {
-	for (i=0;i<100;i++)
+	//for (i=0;i<100;i++)
 	{
-		sin_val[i] = ((sin(i*2*PI/100) + 1)*((4095+1)/2) + shift);
+		//sin_val[i] = ((sin(i*2*PI/100) + 1)*((4095+1)/2) + shift);
 		//sin_val[i] = ((sin(i*2*PI/100) + 1)*(4095+1/2)); //il secondo elemento è l'ampiezza *** attenzione, essendo valori interi, se <0 la sin appare tosata
 		//il +1000 serve solo se applichiamo il fattore di scala e va modulato in base ad esso
 		//1000 va bene per il fattore di scala 0.1, poichè mi fa uscire dal limite della risoluzione del DAC
-		sin_val[i]=sin_val[i]*scale; //fattore di scala
+		//sin_val[i]=sin_val[i]*scale; //fattore di scala
 	}
+
+	for (i=0;i<300;i++)
+	{
+		sin_val[i] = ((sin(i*2*PI/100) + 1)*((4095+1)/2) + shift)*scale;
+
+	}
+
+	for (i=0;i<100;i++)
+	{
+		ground[i] = (i-i+2048+shift)*scale;
+
+	}
+
+	for (i=0;i<100;i++)
+	{
+		peakpositive[i] = (i-i+4096+shift)*scale;
+
+	}
+
+	for (i=0;i<100;i++)
+	{
+		peaknegative[i] = (i-i+shift)*scale;
+
+	}
+
+	int index2=0;
+	for (i=0; i<40;i++)
+	{
+		signal[index2++]=ground[i];
+	}
+
+	for (i=0; i<10;i++)
+	{
+		signal[index2++]=peakpositive[i];
+	}
+
+	for (i=0; i<10;i++)
+	{
+		signal[index2++]=peaknegative[i];
+	}
+
+	for (i=0; i<40;i++)
+	{
+		signal[index2++]=ground[i];
+	}
+
+	for (i=0; i<300;i++)
+	{
+		signal[index2++]=sin_val[i];
+	}
+
+	for (i=0; i<40;i++)
+	{
+		signal[index2++]=ground[i];
+	}
+
+	for (i=0; i<10;i++)
+	{
+		signal[index2++]=peakpositive[i];
+	}
+
+	for (i=0; i<10;i++)
+	{
+		signal[index2++]=peaknegative[i];
+	}
+
+	for (i=0; i<40;i++)
+	{
+		signal[index2++]=ground[i];
+	}
+
 
 }
 
-uint8_t buffertx[100]="";
+uint8_t buffertx[500]="";
 
 /* USER CODE END 0 */
 
@@ -109,7 +187,9 @@ uint8_t buffertx[100]="";
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-	unsigned int uiAnalogData[100];
+	uint16_t uiAnalogData[500];
+	uint16_t uiAnalogData2[500];
+	uint16_t VIval[1000];
 	//unsigned int uiAnalogData=0;
 
 
@@ -168,6 +248,8 @@ Error_Handler();
   MX_TIM2_Init();
   MX_ADC1_Init();
   MX_USART3_UART_Init();
+  MX_ADC2_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
 
 
@@ -175,7 +257,7 @@ Error_Handler();
 
  get_sineval();
 
- HAL_DAC_Start_DMA(&hdac1, DAC_CHANNEL_1, sin_val, 100, DAC_ALIGN_12B_R);
+ HAL_DAC_Start_DMA(&hdac1, DAC_CHANNEL_1, signal, 500, DAC_ALIGN_12B_R);
 
 
 
@@ -190,15 +272,15 @@ Error_Handler();
     /* USER CODE BEGIN 3 */
 
 
-	  uint8_t buffertx[100]="";
+	  uint8_t buffertx[1000]="";
 int cont=0;
 int j=0;
 int alfa=100000;
-
+int k=0;
 
         //DAC
-
-		for (i=0;i<100;i++)
+		//enable timer
+		for (i=0;i<500;i++)
 		{
 
 
@@ -210,7 +292,8 @@ int alfa=100000;
            Assuming that VREF+ = 3.3V, DAC_OUT1 = (3.3 * 868) / 4095 = 0.7V
 
 		   */
-      		HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, sin_val[i]);
+      		HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, signal[i]);
+
      		for (j=0;j<alfa;j++)  //ritardo sintetico
      		{
      			cont++;
@@ -226,11 +309,24 @@ int alfa=100000;
 		  //uiAnalogData=HAL_ADC_GetValue(&hadc1);
 		  //HAL_ADC_Stop(&hadc1);
 
+
+
+     		// disabilito timer e sposto la parte seguente nell'interrupt del timer
+
+
+     	  //Acquisizione dati dopo il passaggio dal sensore
 		  HAL_ADC_Start(&hadc1);
-		  HAL_ADC_PollForConversion(&hadc1, 100);
+		  HAL_ADC_PollForConversion(&hadc1, 1000);
 		  uiAnalogData[i]=HAL_ADC_GetValue(&hadc1);
 		  //uiAnalogData=HAL_ADC_GetValue(&hadc1);
 		  HAL_ADC_Stop(&hadc1);
+
+		  //Acquisizione dati prima il passaggio dal sensore
+		  HAL_ADC_Start(&hadc2);
+		  HAL_ADC_PollForConversion(&hadc2, 1000);
+		  uiAnalogData2[i]=HAL_ADC_GetValue(&hadc2);
+		  //uiAnalogData=HAL_ADC_GetValue(&hadc1);
+		  HAL_ADC_Stop(&hadc2);
 
 		  //USUART
 		  //sprintf(buffertx, "%d\n\r", uiAnalogData[i]);
@@ -240,8 +336,41 @@ int alfa=100000;
 
 		}
 
+		//Salvataggio di un vettore lunghezza 100 del singolo segnale DAC o ADC (tensione o corrente)
+		//successivo invio a seriale
+		//for (i=0;i<100;i++)
+		//{
+			//USUART
+
+			  //sprintf(buffertx, "%d\n\r", uiAnalogData[i]);
+			  //sprintf(buffertx, "%d\n\r", sin_val[i]);
+
+			  //HAL_UART_Transmit(&huart3, buffertx, 100, 1);
+		//}
+
+		//Unione dei vettori Tensione e corrente e successivo invio a seriale
 
 
+		int index=0;
+		for (i=0;i<500;i++)
+		{
+			VIval[index++]=uiAnalogData2[i];
+		}
+
+		for (i=0;i<500;i++)
+		{
+			VIval[index++]=uiAnalogData[i];
+		}
+
+		for (i=0;i<1000;i++)
+		{
+			sprintf(buffertx, "%d\n\r", VIval[i]);
+
+			HAL_UART_Transmit(&huart3, buffertx, 1000, 1);
+
+		}
+		//ritardo necessario per il plot su matlab, affinchè il vettore si formi sempre nello stesso ordine
+		HAL_Delay(1000);
   }
 
   /* USER CODE END 3 */
@@ -387,6 +516,63 @@ static void MX_ADC1_Init(void)
 }
 
 /**
+  * @brief ADC2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC2_Init(void)
+{
+
+  /* USER CODE BEGIN ADC2_Init 0 */
+
+  /* USER CODE END ADC2_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC2_Init 1 */
+
+  /* USER CODE END ADC2_Init 1 */
+  /** Common config
+  */
+  hadc2.Instance = ADC2;
+  hadc2.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV1;
+  hadc2.Init.Resolution = ADC_RESOLUTION_16B;
+  hadc2.Init.ScanConvMode = ADC_SCAN_DISABLE;
+  hadc2.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  hadc2.Init.LowPowerAutoWait = DISABLE;
+  hadc2.Init.ContinuousConvMode = DISABLE;
+  hadc2.Init.NbrOfConversion = 1;
+  hadc2.Init.DiscontinuousConvMode = DISABLE;
+  hadc2.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc2.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc2.Init.ConversionDataManagement = ADC_CONVERSIONDATA_DR;
+  hadc2.Init.Overrun = ADC_OVR_DATA_PRESERVED;
+  hadc2.Init.LeftBitShift = ADC_LEFTBITSHIFT_NONE;
+  hadc2.Init.OversamplingMode = DISABLE;
+  if (HAL_ADC_Init(&hadc2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_3;
+  sConfig.Rank = ADC_REGULAR_RANK_1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
+  sConfig.SingleDiff = ADC_SINGLE_ENDED;
+  sConfig.OffsetNumber = ADC_OFFSET_NONE;
+  sConfig.Offset = 0;
+  sConfig.OffsetSignedSaturation = DISABLE;
+  if (HAL_ADC_ConfigChannel(&hadc2, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC2_Init 2 */
+
+  /* USER CODE END ADC2_Init 2 */
+
+}
+
+/**
   * @brief DAC1 Initialization Function
   * @param None
   * @retval None
@@ -424,6 +610,53 @@ static void MX_DAC1_Init(void)
   /* USER CODE BEGIN DAC1_Init 2 */
 
   /* USER CODE END DAC1_Init 2 */
+
+}
+
+/**
+  * @brief TIM1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM1_Init(void)
+{
+
+  /* USER CODE BEGIN TIM1_Init 0 */
+
+  /* USER CODE END TIM1_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM1_Init 1 */
+
+  /* USER CODE END TIM1_Init 1 */
+  htim1.Instance = TIM1;
+  htim1.Init.Prescaler = 100;
+  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim1.Init.Period = 4730;
+  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim1.Init.RepetitionCounter = 0;
+  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterOutputTrigger2 = TIM_TRGO2_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM1_Init 2 */
+
+  /* USER CODE END TIM1_Init 2 */
 
 }
 

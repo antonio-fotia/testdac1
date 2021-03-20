@@ -64,6 +64,7 @@ void Error_Handler(void);
 #define STLINK_TX_GPIO_Port GPIOD
 void   MX_USART3_UART_Init(void);
 void   MX_ADC1_Init(void);
+void   MX_ADC2_Init(void);
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */
